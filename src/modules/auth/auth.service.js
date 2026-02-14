@@ -18,7 +18,7 @@ export const registerService = async (data) => {
   }
   const hashedPassword = await hashPassword(password);
   const user = await userModel.create({
-    id: user._id,
+    _id: user._id,
     firstname,
     lastname,
     email,
@@ -54,7 +54,7 @@ export const loginService = async (data) => {
   await user.save();
   return {
     user: {
-      id: user._id,
+      _id: user._id,
       firstname: user.firstname,
       lastname: user.lastname,
       email: user.email,

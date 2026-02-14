@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
+import { minLength } from "zod";
 
-const userSchema = mongoose.Schema(
+const userSchema = new mongoose.Schema(
   {
     firstname: {
       type: String,
@@ -27,6 +28,7 @@ const userSchema = mongoose.Schema(
         return !this.googleId;
       },
       select: false,
+      minlength: 6,
     },
     bio: {
       type: String,
