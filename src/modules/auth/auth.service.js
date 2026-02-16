@@ -18,7 +18,6 @@ export const registerService = async (data) => {
   }
   const hashedPassword = await hashPassword(password);
   const user = await userModel.create({
-    _id: user._id,
     firstname,
     lastname,
     email,
@@ -31,7 +30,11 @@ export const registerService = async (data) => {
   });
   user.refreshToken = refreshToken;
   await user.save();
-  return { user: { firstname, lastname, email }, accessToken, refreshToken };
+  return {
+    user: { firstname, lastname, email, _id: user._id },
+    accessToken,
+    refreshToken,
+  };
 };
 
 export const loginService = async (data) => {
