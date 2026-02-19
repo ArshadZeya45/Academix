@@ -5,6 +5,7 @@ import {
   deleteCourseByIdService,
   getCourseByIdService,
   getCourseService,
+  getSearchCourseService,
   updateCourseByIdService,
 } from "./course.service.js";
 
@@ -31,28 +32,51 @@ export const createCourse = async (req, res, next) => {
 
 export const getCourse = async (req, res, next) => {
   try {
-    const {
-      search = "",
-      category,
-      sort = "latest",
-      page = 1,
-      limit = 8,
-    } = req.query;
+    const allowedParams = ["type", "page", "limit", "latest"];
+    const incomingParams = Object.keys(req.query);
 
-    const pageNumber = parseInt(page);
-    const limitNumber = parseInt(limit);
+    for (let key of incomingParams) {
+      if (!allowedParams.includes(key)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid query parameter: ${key}`,
+        });
+      }
+    }
 
-    const data = await getCourseService(
-      search,
-      category,
-      sort,
-      pageNumber,
-      limitNumber,
-    );
+    const allowedTypes = ["all", "latest"];
+    const type = req.query.type?.trim() || "all";
+
+    if (!allowedTypes.includes(type)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid type value",
+      });
+    }
+
+    const pageNumber = parseInt(req.query.page) || 1;
+    const limitNumber = Math.min(parseInt(req.query.limit) || 8, 20);
+
+    const data = await getCourseService(type, pageNumber, limitNumber);
+
     return res
       .status(HTTP_STATUS.OK)
       .json(
-        new ApiResponse(HTTP_STATUS.OK, "Course fetched successfully", data),
+        new ApiResponse(HTTP_STATUS.OK, "Course Fetched Successfully", data),
+      );
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getSearchCourse = async (req, res, next) => {
+  try {
+    const { q = "" } = req.query;
+    const results = await getSearchCourseService(q);
+    return res
+      .status(HTTP_STATUS.OK)
+      .json(
+        new ApiResponse(HTTP_STATUS.OK, "Course fetched successfully", results),
       );
   } catch (error) {
     next(error);
