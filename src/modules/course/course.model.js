@@ -109,21 +109,8 @@ const courseSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-courseSchema.index(
-  {
-    title: "text",
-    description: "text",
-    shortDescription: "text",
-    categoryName: "text",
-  },
-  {
-    weights: {
-      title: 10,
-      categoryName: 5,
-      shortDescription: 1,
-      description: 1,
-    },
-  },
-);
+courseSchema.index({ title: 1 });
+courseSchema.index({ categoryName: 1 });
+courseSchema.index({ shortDescription: 1 });
 
 export const courseModel = mongoose.model("Course", courseSchema);

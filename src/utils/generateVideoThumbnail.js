@@ -1,6 +1,6 @@
 import cloudinary from "../config/cloud.js";
 
-export const generateVideoThumbnail = (publicId, second = 2) => {
+export const generateVideoThumbnail = (publicId, second = 3) => {
   try {
     const thumbnailUrl = cloudinary.url(publicId, {
       resource_type: "video",
