@@ -7,34 +7,89 @@ import {
 } from "../../utils/generateToken.js";
 import { hashPassword } from "../../utils/hash.js";
 import { userModel } from "../user/user.model.js";
+import { emailVerificationModel } from "./emailVerification.model.js";
+import { sendVerificationEmail } from "../../utils/sendEmail.js";
+import { generateVerificationToken } from "./generateVerificationToken.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 
-export const registerService = async (data) => {
-  const { firstname, lastname, email, password } = data;
+export const requestEmailVerificationService = async (email) => {
   const existingUser = await userModel.findOne({ email });
+
   if (existingUser) {
-    throw new ApiError(HTTP_STATUS.CONFLICT, "user already exists");
+    throw new ApiError(HTTP_STATUS.CONFLICT, "Email already registered");
+  }
+
+  const existingVerification = await emailVerificationModel.findOne({ email });
+
+  if (existingVerification) {
+    const now = new Date();
+
+    if (existingVerification.expiresAt > now) {
+      throw new ApiError(
+        HTTP_STATUS.TOO_MANY_REQUESTS,
+        "Please wait before requesting another verification email",
+      );
+    }
+  }
+
+  const { rawToken, tokenHash } = await generateVerificationToken();
+
+  const expiresAt = new Date(Date.now() + 3 * 60 * 1000);
+
+  const emailVerification = await emailVerificationModel.findOneAndUpdate(
+    { email },
+    { tokenHash, expiresAt },
+    { upsert: true, new: true },
+  );
+
+  await sendVerificationEmail(email, rawToken);
+
+  return { expiresAt, userEmail: emailVerification.email };
+};
+
+export const completeRegistrationService = async (
+  token,
+  firstname,
+  lastname,
+  password,
+) => {
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  const verification = await emailVerificationModel.findOne({ tokenHash });
+  if (!verification) {
+    throw new ApiError(
+      HTTP_STATUS.BAD_RESQUEST,
+      "Invalid or expired verification link",
+    );
+  }
+  if (verification.expiresAt < new Date()) {
+    throw new ApiError(HTTP_STATUS.BAD_RESQUEST, "Verification link expired");
+  }
+  const existingUser = await userModel.findOne({
+    email: verification.email,
+  });
+  if (existingUser) {
+    await emailVerificationModel.deleteOne({
+      _id: verification._id,
+    });
+
+    throw new ApiError(HTTP_STATUS.CONFLICT, "Account already exists");
   }
   const hashedPassword = await hashPassword(password);
   const user = await userModel.create({
+    email: verification.email,
     firstname,
     lastname,
-    email,
     password: hashedPassword,
     role: "student",
   });
-  const accessToken = await generateAccessToken(user._id, { role: user.role });
-  const refreshToken = await generateRefreshToken(user._id, {
-    role: user.role,
-  });
+  await emailVerificationModel.deleteOne({ _id: verification._id });
+  const accessToken = await generateAccessToken(user._id, user.role);
+  const refreshToken = await generateRefreshToken(user._id, user.role);
   user.refreshToken = refreshToken;
   await user.save();
-  return {
-    user: { firstname, lastname, email, _id: user._id },
-    accessToken,
-    refreshToken,
-  };
+  return { user, accessToken, refreshToken };
 };
 
 export const loginService = async (data) => {
@@ -61,6 +116,7 @@ export const loginService = async (data) => {
       firstname: user.firstname,
       lastname: user.lastname,
       email: user.email,
+      role: user.role,
     },
     accessToken,
     refreshToken,
