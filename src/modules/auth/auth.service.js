@@ -13,6 +13,8 @@ import { generateVerificationToken } from "./generateVerificationToken.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { passwordReset } from "./passwordResetSchema.js";
+import { sendPasswordResetEmail } from "../../utils/sendPasswordResetEmail.js";
 
 export const requestEmailVerificationService = async (email) => {
   const existingUser = await userModel.findOne({ email });
@@ -148,4 +150,65 @@ export const refreshTokenService = async (refreshToken) => {
   user.refreshToken = newRefreshToken;
   await user.save();
   return { newAccessToken, newRefreshToken };
+};
+
+export const forgotPasswordService = async (email) => {
+  const user = await userModel.findOne({ email });
+
+  if (!user) {
+    throw new ApiError(HTTP_STATUS.NOT_FOUND, "Your account does not exist");
+  }
+
+  const { rawToken, tokenHash } = generateVerificationToken();
+
+  const expiresAt = new Date(Date.now() + 3 * 60 * 1000);
+
+  const updatedData = await passwordReset
+    .findOneAndUpdate(
+      { user: user._id },
+      { tokenHash, expiresAt },
+      { upsert: true },
+    )
+    .populate("user");
+
+  await sendPasswordResetEmail(email, rawToken);
+
+  return { userEmail: user.email, expiresAt };
+};
+
+export const resetPasswordService = async (
+  token,
+  password,
+  confirmPassword,
+) => {
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+  const resetRecord = await passwordReset.findOne({ tokenHash });
+
+  if (!resetRecord) {
+    throw new ApiError(400, "Invalid or expired token");
+  }
+
+  if (resetRecord.expiresAt < new Date()) {
+    throw new ApiError(400, "Token expired");
+  }
+
+  if (password !== confirmPassword) {
+    throw new ApiError(HTTP_STATUS.BAD_RESQUEST, "Password does not match");
+  }
+
+  const user = await userModel.findById(resetRecord.user);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  user.password = await hashPassword(confirmPassword);
+  user.refreshToken = null; // invalidate sessions
+
+  await user.save();
+
+  await passwordReset.deleteOne({ _id: resetRecord._id });
+
+  return true;
 };

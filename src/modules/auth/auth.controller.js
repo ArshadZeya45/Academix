@@ -1,9 +1,11 @@
 import {
   completeRegistrationService,
+  forgotPasswordService,
   loginService,
   logoutService,
   refreshTokenService,
   requestEmailVerificationService,
+  resetPasswordService,
 } from "./auth.service.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { HTTP_STATUS } from "../../constants.js";
@@ -82,6 +84,38 @@ export const refreshAccessToken = async (req, res, next) => {
     return res
       .status(HTTP_STATUS.OK)
       .json(new ApiResponse(HTTP_STATUS.OK, "Token refreshed"));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const forgetPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    const { userEmail, expiresAt } = await forgotPasswordService(email);
+    return res
+      .status(HTTP_STATUS.OK)
+      .json(
+        new ApiResponse(
+          HTTP_STATUS.OK,
+          `Password reset verification link successfully sent on ${userEmail}`,
+          { expiresAt },
+        ),
+      );
+  } catch (error) {
+    next(error);
+  }
+};
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { token, password, confirmPassword } = req.body;
+    console.log(token);
+    console.log(password);
+    console.log(confirmPassword);
+    await resetPasswordService(token, password, confirmPassword);
+    return res
+      .status(HTTP_STATUS.OK)
+      .json(new ApiResponse(HTTP_STATUS.OK, "Password reset successfully"));
   } catch (error) {
     next(error);
   }
